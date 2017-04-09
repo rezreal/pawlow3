@@ -1,0 +1,301 @@
+---
+feature_name: Web Bluetooth / Battery Level (Async Await)
+chrome_version: 55
+check_min_version: true
+feature_id: 5264933985976320
+icon_url: icon.png
+index: index.html
+---
+
+
+    <img class="pageIcon" src="icon.png">
+    <h1>Web Bluetooth / Pavlok Sample</h1>
+    <p class="availability">
+      Available in <a target="_blank" href="https://www.chromestatus.com/feature/5264933985976320">Chrome 55+</a> |
+      <a target="_blank" href="https://github.com/rezreal/pavlow3/web-bluetooth-example.html">View on GitHub</a>
+    </p>
+    <p>The <a href="https://developers.google.com/web/updates/2015/07/interact-with-ble-devices-on-the-web">Web Bluetooth
+  API</a> lets websites discover and communicate with devices over the
+Bluetooth 4 wireless standard using the Generic Attribute Profile (GATT). It is
+currently partially implemented in Android M, Chrome OS, Linux, and Mac.</p>
+
+<script>
+  if('serviceWorker' in navigator) {
+    //navigator.serviceWorker.register('service-worker.js');
+  }
+</script>
+
+<script>
+  window.addEventListener('DOMContentLoaded', function() {
+    const searchParams = new URL(location).searchParams;
+    const inputs = Array.from(document.querySelectorAll('input[id]'));
+
+    inputs.forEach(input => {
+      if (searchParams.has(input.id)) {
+        if (input.type == 'checkbox') {
+          input.checked = searchParams.get(input.id);
+        } else {
+          input.value = searchParams.get(input.id);
+          input.blur();
+        }
+      }
+      if (input.type == 'checkbox') {
+        input.addEventListener('change', function(event) {
+          const newSearchParams = new URL(location).searchParams;
+          if (event.target.checked) {
+            newSearchParams.set(input.id, event.target.checked);
+          } else {
+            newSearchParams.delete(input.id);
+          }
+          history.replaceState({}, '', Array.from(newSearchParams).length ?
+              location.pathname + '?' + newSearchParams : location.pathname);
+        });
+      } else {
+        input.addEventListener('input', function(event) {
+          const newSearchParams = new URL(location).searchParams;
+          if (event.target.value) {
+            newSearchParams.set(input.id, event.target.value);
+          } else {
+            newSearchParams.delete(input.id);
+          }
+          history.replaceState({}, '', Array.from(newSearchParams).length ?
+              location.pathname + '?' + newSearchParams : location.pathname);
+        });
+      }
+    });
+  });
+</script>
+
+
+<p>This sample illustrates the use of the Web Bluetooth API to interact with the Pavlok alert service.</p>
+
+    <button id="pair">Pair with Pavlok</button>
+
+    <form>
+      <fieldset>
+        <legend>Status</legend>
+        <label for="battery_level">Battery Level</label>
+        <progress id="battery_level" value="0" max="100"></progress>
+        <input id="battery_level_text" disabled/>
+        <label for="shock_count_stat">Shock Count</label>
+        <input id="shock_count_stat" disabled/>
+
+      </fieldset>
+      <fieldset>
+        <legend>Beep/Vibrate</legend>
+        <label for="count">Count (0-7)</label>
+        <input id="count" type="number" min="0" max="10" value="1"/>
+        <label for="level">Level (0-255)</label>
+        <input id="level" type="number" min="0" max="255" value="255"/>
+        <label for="on">On-Duration (millis*20)</label>
+        <input id="on" type="number" min="0" max="255" value="20"/>
+        <label for="off">Off-Duration (millis*20)</label>
+        <input id="off" type="number" min="0" max="255" value="0"/>
+        <button type="button" accesskey="b" id="beep" disabled="disabled">Beep</button>
+        <button type="button" accesskey="v" id="vibrate" disabled="disabled">Vibrate</button>
+      </fieldset>
+      <fieldset>
+        <legend>Shock</legend>
+        <label for="shock_count">Count (0-7)</label>
+        <input id="shock_count" type="number" min="0" max="10" value="1"/>
+
+        <label for="shock_level">Level (0-255)</label>
+        <input id="shock_level" type="number" min="0" max="255" value="10"/>
+        <button type="button" accesskey="c" id="shock" disabled="disabled">Shock</button>
+      </fieldset>
+    </form>
+
+<script>
+  var ChromeSamples = {
+    log: function() {
+
+      var line = Array.prototype.slice.call(arguments).map(function(argument) {
+        return typeof argument === 'string' ? argument : JSON.stringify(argument);
+      }).join(' ');
+
+      document.querySelector('#log').textContent += line + '\n';
+      const elem = document.getElementById('log');
+      elem.scrollTop = elem.scrollHeight;
+    },
+
+    clearLog: function() {
+      document.querySelector('#log').textContent = '';
+    },
+
+    setStatus: function(status) {
+      document.querySelector('#status').textContent = status;
+    },
+
+    setContent: function(newContent) {
+      var content = document.querySelector('#content');
+      while(content.hasChildNodes()) {
+        content.removeChild(content.lastChild);
+      }
+      content.appendChild(newContent);
+    }
+
+  };
+</script>
+
+<h3>Live Output</h3>
+<div id="output" class="output">
+  <div id="content"></div>
+  <div id="status"></div>
+  <pre id="log"></pre>
+</div>
+
+
+<script>
+  if (/Chrome\/(\d+\.\d+.\d+.\d+)/.test(navigator.userAgent)){
+    // Let's log a warning if the sample is not supposed to execute on this
+    // version of Chrome.
+    if (55 > parseInt(RegExp.$1)) {
+      ChromeSamples.setStatus('Warning! Keep in mind this sample has been tested with Chrome ' + 55 + '.');
+    }
+  }
+</script>
+
+  
+    
+<script>
+
+const alertService = "75dbc164-476f-44ec-8894-23fd0bb2f081";
+const beepCharacteristic = "efd6fd9d-681b-4f19-9121-59900f57a401";
+const vibrateCharacteristic = "7eca7033-fc71-4a58-8775-225e813a03fb";
+const shockCharacteristic = "6e9d7a34-ddc0-4b47-9df4-fc45d2891827";
+const shockCountCharacteristic = "6647679b-2bf8-4baf-bdd2-969f51aeb90e";
+
+let hasAcceptedWarning = false;
+
+
+document.querySelector('button#pair').addEventListener('click', () => {
+    if (isWebBluetoothEnabled()) {
+        ChromeSamples.clearLog();
+        onButtonClick();
+    }
+});
+
+async function onButtonClick() {
+  try {
+    log('Requesting Bluetooth Device...');
+    const device = await navigator.bluetooth.requestDevice({
+        filters: [ {namePrefix: "Pavlok"}],
+        optionalServices: [alertService, 'battery_service']
+        //acceptAllDevices: true
+    });
+
+    log('Connecting to GATT Server...');
+    const server = await device.gatt.connect();
+
+    log('Getting Alert Service...');
+    const service =  await server.getPrimaryService(alertService);
+
+    log('Getting Beep Characteristic...');
+    const beep = await service.getCharacteristic(beepCharacteristic);
+
+
+
+    document.querySelector("button#beep").disabled = false;
+    document.querySelector("button#beep").addEventListener('click', () => {
+        const arr = new Uint8Array([0x80 + parseInt(document.querySelector('#count').value),
+            parseInt(document.querySelector('#level').value),
+            parseInt(document.querySelector('#on').value),
+            parseInt(document.querySelector('#off').value)]);
+        log('> Beep with: ' + arr);
+        beep.writeValue(arr);
+        return true;
+    });
+
+    log('Getting Vibrate Characteristic...');
+    const vibrate = await service.getCharacteristic(vibrateCharacteristic);
+    document.querySelector("button#vibrate").disabled = false;
+    document.querySelector("button#vibrate").addEventListener('click', () => {
+        const arr = new Uint8Array([0x80 + parseInt(document.querySelector('#count').value),
+            parseInt(document.querySelector('#level').value),
+            parseInt(document.querySelector('#on').value),
+            parseInt(document.querySelector('#off').value)]);
+        log('> Vibrate with: ' + arr);
+        vibrate.writeValue(arr);
+        return true;
+    });
+
+    log('Getting Shock Characteristic...');
+    const shock = await service.getCharacteristic(shockCharacteristic);
+    document.querySelector("button#shock").disabled = false;
+    document.querySelector("button#shock").addEventListener('click', () => {
+
+        if (hasAcceptedWarning || window.confirm("This can hurt! Are you sure you want to continue?")) {
+            hasAcceptedWarning = true;
+            const arr = new Uint8Array([0x81,
+                parseInt(document.querySelector('#shock_level').value),
+                parseInt(document.querySelector('#shock_count').value),
+                0]);
+            log('> Shock with: ' + arr);
+            shock.writeValue(arr);
+        }
+        return true;
+    });
+
+      log('Getting Shock Count Characteristic...');
+      const shockCountChar = await service.getCharacteristic(shockCountCharacteristic);
+
+      log('Reading Shock Count ...');
+      const shockCount = await shockCountChar.readValue();
+      document.querySelector('input#shock_count_stat').value = shockCount.getUint8(0);
+      log('> Shock Count is ' + shockCount.getUint8(0));
+
+      log('Getting Battery Service...');
+      const battery = await server.getPrimaryService('battery_service');
+
+      {
+        log('Getting Battery Level Characteristic...');
+        const batteryLevelCharacteristic = await battery.getCharacteristic('battery_level');
+
+        log('Starting Battery Level Notifications...');
+        await batteryLevelCharacteristic.startNotifications();
+
+
+        log('Reading Battery Level...');
+        const value = await batteryLevelCharacteristic.readValue();
+        document.querySelector('progress#battery_level').value = value.getUint8(0);
+        document.querySelector('input#battery_level_text').value = value.getUint8(0) + "%";
+        log('> Battery Level is ' + value.getUint8(0) + '%');
+
+        batteryLevelCharacteristic.addEventListener('characteristicvaluechanged',
+            handleBatteryLevelChanged);
+
+        function handleBatteryLevelChanged(event) {
+            let batteryLevel = event.target.value.getUint8(0);
+            log('> Battery Level is ' + batteryLevel + '%');
+            document.querySelector('progress#battery_level').value = Math.round(batteryLevel);
+            document.querySelector('input#battery_level_text').value = batteryLevel + "%";
+        }
+      }
+
+
+
+
+  } catch(error) {
+    log('Argh! ' + error);
+  }
+}
+</script>
+    
+
+
+
+<script>
+  log = ChromeSamples.log;
+
+
+  function isWebBluetoothEnabled() {
+    if (navigator.bluetooth) {
+      return true;
+    } else {
+      ChromeSamples.setStatus('Web Bluetooth API is not available.\n' +
+          'Please make sure the "Experimental Web Platform features" flag is enabled.');
+      return false;
+    }
+  }
+</script>
+
